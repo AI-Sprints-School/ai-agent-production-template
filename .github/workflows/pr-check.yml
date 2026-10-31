@@ -1,0 +1,42 @@
+name: pr-check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Заголовок, размер, лишние файлы, секреты
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          fail=0
+          if ! printf '%s' "$TITLE" | grep -Eq '^AP-[1-9][0-9]?-1( |$)'; then
+            echo "Заголовок должен начинаться с AP-<урок>-1 без ведущего нуля: $TITLE"; fail=1
+          fi
+          files=$(git diff --name-only "$BASE"...HEAD)
+          count=$(printf '%s\n' "$files" | grep -c . || true)
+          echo "Файлов в pull request: $count"
+          if [ "$count" -gt 30 ]; then
+            echo "Больше 30 файлов: в pull request — только файлы урока и отчёт"; fail=1
+          fi
+          if printf '%s\n' "$files" | grep -Eq '^(\.env$|\.venv[^/]*/|data/|logs/)|/\.env$'; then
+            echo "В pull request попали .env, .venv*, data/ или logs/:"
+            printf '%s\n' "$files" | grep -E '^(\.env$|\.venv[^/]*/|data/|logs/)|/\.env$'; fail=1
+          fi
+          if git diff "$BASE"...HEAD | grep -E '^\+' | grep -Eq 'wai-[A-Za-z0-9_-]{16,}'; then
+            echo "В изменениях похоже на ключ WorkAI (wai-…). Отзовите ключ в кабинете и уберите его из истории"; fail=1
+          fi
+          if git diff "$BASE"...HEAD | grep -E '^\+' | grep -Eq 'postgres(ql)?://[^:/@[:space:]]+:[^@[:space:]]+@'; then
+            echo "В изменениях похоже на строку подключения Neon с паролем. Сбросьте пароль в Neon и уберите строку из истории"; fail=1
+          fi
+          if git diff "$BASE"...HEAD | grep -E '^\+' | grep -Eq '/rest/[0-9]+/[A-Za-z0-9]{8,}/'; then
+            echo "В изменениях похоже на адрес входящего вебхука CRM. Создайте вебхук заново и уберите адрес из истории"; fail=1
+          fi
+          exit $fail
