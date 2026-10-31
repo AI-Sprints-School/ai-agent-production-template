@@ -1,0 +1,6 @@
+{
+  "prays": [
+    {"file": "prays-2026-01.csv", "month": "2026-01"},
+    {"file": "prays-2026-09.csv", "month": "2026-09"}
+  ]
+}
